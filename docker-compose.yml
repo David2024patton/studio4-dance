@@ -1,34 +1,54 @@
-version: '3.8'
+version: "3.8"
+
 services:
   postgres:
     image: postgres:15-alpine
     environment:
       POSTGRES_DB: studio4
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: studio4secure
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    ports:
+      - "31459:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - studio4-network
 
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/studio4
-      SECRET_KEY: studio4-super-secret-production-key-change-me
-      GEMINI_API_KEY: AIzaSyCkp51AeSxWj321JPy_NRfvPF7_rvCdEHw
+      DATABASE_URL: postgresql+asyncpg://postgres:studio4secure@postgres:5432/studio4
+      SECRET_KEY: studio4-dev-secret
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      DEBUG: "true"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    ports:
+      - "24644:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - studio4-network
 
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "17205:80"
     depends_on:
       - backend
+    networks:
+      - studio4-network
 
 volumes:
   postgres_data:
+
+networks:
+  studio4-network:
+    driver: bridge
